@@ -85,8 +85,7 @@ class Upload(BluePrintBoiler):
                 item = yield None
 
                 path = item.get("_path", "")
-                if (not "_soundcloud_id" in item or
-                     path in self.already_recorded):
+                if (not "_soundcloud_id" in item):
                     continue
                 records.writerow((path, item["_soundcloud_id"]))
                 self.already_recorded[path] = item["_soundcloud_id"]
@@ -166,7 +165,7 @@ class Upload(BluePrintBoiler):
             file_["title"] = file_["title"].encode("utf-8")
         # TODO: add more metadata do the soundcloud track
         error = None
-        logger.info("Uploading audio for item at %s" %
+        logger.warn("Uploading audio for item at %s" %
             item.get("_path", "<unknown>"))
         try:
             track = self.client.post("/tracks", track=file_)
