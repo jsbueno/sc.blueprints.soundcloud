@@ -22,8 +22,7 @@ from sc.blueprints.soundcloud import logger
 # attention to the "{track_id}" bit
 SOUNDCLOUD_TEMPLATE_URL = ("http://w.soundcloud.com/player/?"
     "url=http%3A%2F%2Fapi.soundcloud.com%2Ftracks%2F"
-    "{track_id}&amp;show_artwork=true"
-
+    "{track_id}&amp;show_artwork=true")
 
 @blueprint("sc.blueprints.soundcloud.upload")
 class Upload(BluePrintBoiler):
@@ -47,19 +46,19 @@ class Upload(BluePrintBoiler):
                          " token should be passed as an \"acces_token\" "
                          "option on the cfg file. "
                          "This blueprint is **DISABLED** for this run")
-             self.token = ""
+            self.token = ""
         # Wether to remove the sound datafrom the item before dispacthing
         # it through the pipeline
 
         self.remove_data = ast.literal_eval(self.options.get(
             "remove_data", "True"))
         self.audio_types = ast.literal_eval(self.options.get(
-            "audio_types", """{"sound", "sc.embedder"}"""))
+            "audio_types", """("audio",)"""))
         self.url_template = self.options.get(
             "url_template", SOUNDCLOUD_TEMPLATE_URL)
 
         self.re_upload_existing = ast.literal_eval(self.options.get(
-            "re_upload_existing"," False"))
+            "re_upload_existing", "False"))
 
         self.default_track_name = self.options.get(
                 "default_track_name", "Plone audio file")
@@ -75,7 +74,7 @@ class Upload(BluePrintBoiler):
         in case the creation of plone objects fail
         in the same pipeline
         """
-        with open(self.record_file, "at") as records_:
+        with open(self.record_file, "a+t") as records_:
             records = csv.writer(records_)
             while True:
                 # Item is sent here at the end
@@ -87,9 +86,9 @@ class Upload(BluePrintBoiler):
 
                 path = item.get("_path", "")
                 if (not "_soundcloud_id" in item or
-                     item in self.already_recorded):
+                     path in self.already_recorded):
                     continue
-                recorder.writerow((path, item["_soundcloud_id"]))
+                records.writerow((path, item["_soundcloud_id"]))
                 self.already_recorded[path] = item["_soundcloud_id"]
 
     def pre_pipeline(self):
@@ -102,7 +101,7 @@ class Upload(BluePrintBoiler):
                          " in the configuration is invalid or expired."
                          "Please check the docs on how to get a new token"
                          "This blueprint is **DISABLED** for this run")
-             self.client = None
+            self.client = None
 
         self.already_recorded = self.storage.get(
             "soundcloud_stored_ids", None)
@@ -112,9 +111,12 @@ class Upload(BluePrintBoiler):
 
         # make an in memor dict with the paths already recorded
         # and their soundcloud id's
-        with open(self.record_file) as records_:
-            records = csv.reader(file)
-            self.already_recorded = dict((row for row in records))
+        try:
+            with open(self.record_file) as records_:
+                records = csv.reader(records_)
+                self.already_recorded = dict((row for row in records))
+        except IOError: # likely teh file does not exist:
+            self.already_recorded = dict()
         #starts the ID for the comming files
         self.log_uploaded_audio = self._log_uploaded_audio_iter()
         # and wind it to the point of getting the first item on
@@ -140,7 +142,7 @@ class Upload(BluePrintBoiler):
             data = item.get("file", None)
 
         if (self.get_type(item) not in self.audio_types or
-                       not self.client
+                       not self.client or
                        not data or
                        not "data" in data or
                        "_audio_url" in item):
@@ -151,18 +153,23 @@ class Upload(BluePrintBoiler):
         path = self.get_path(item)
         if path in self.already_recorded:
             if self.re_upload_existing:
-
+                del self.already_recorded["path"]
             else:
                 item["_soundcloud_id"] = self.already_recorded[path]
                 return item
-        file["asset_data"] = StringIO(data["data"])
-        file["title"] = item.get("title", self.default_track_name)
+        file_ = {}
+        file_["asset_data"] = StringIO(data["data"])
+        file_["title"] = item.get("title", self.default_track_name)
+        # SURPRISE! iT IS 2013, AND THEY GIVE YOU AN api THAT IS NOT
+        # I18N AWARE!!!!!!!!!!!!
+        if isinstance(file_["title"], unicode):
+            file_["title"] = file_["title"].encode("utf-8")
         # TODO: add more metadata do the soundcloud track
         error = None
-        self.logger.info("Uploading audio for item at %s" %
+        logger.info("Uploading audio for item at %s" %
             item.get("_path", "<unknown>"))
         try:
-            track = self.client.post("/tracks", data)
+            track = self.client.post("/tracks", track=file_)
             status = track.status_code
         except HTTPError as error:
             status = 403

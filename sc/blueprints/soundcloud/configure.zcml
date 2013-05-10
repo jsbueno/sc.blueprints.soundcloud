@@ -13,9 +13,6 @@
     <!-- Grok the package to initialise schema interfaces and content classes -->
     <grok:grok package="." />
 
-    <!-- Templates overrides -->
-    <include package="z3c.jbot" file="meta.zcml" />
-    <browser:jbot directory="overrides" />
 
     <!-- Default profile -->
     <genericsetup:registerProfile
