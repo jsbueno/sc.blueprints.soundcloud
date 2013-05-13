@@ -10,6 +10,7 @@ from requests.exceptions import HTTPError
 #requests si not listed on the package requirements, but it is
 # pre-requisite of the "soundcloud"
 
+from DateTime import DateTime
 
 from sc.transmogrifier.utils import blueprint
 from sc.transmogrifier.utils import BluePrintBoiler
@@ -98,7 +99,7 @@ class Upload(BluePrintBoiler):
             logger.error("Could not retrieve a valid client to the"
                          " soundcloud API. Most likely the access_token"
                          " in the configuration is invalid or expired."
-                         "Please check the docs on how to get a new token"
+                         " Please check the docs on how to get a new token.\n"
                          "This blueprint is **DISABLED** for this run")
             self.client = None
 
@@ -163,6 +164,17 @@ class Upload(BluePrintBoiler):
         # I18N AWARE!!!!!!!!!!!!
         if isinstance(file_["title"], unicode):
             file_["title"] = file_["title"].encode("utf-8")
+        #release_day, release_month, release_year
+        date_str = item.get("effectiveDate",
+                    item.get("modification_date",
+                     item.get("creation_date", None)))
+        date = DateTime(date_str)
+        file_["release_day"] = date.day()
+        file_["release_month"] = date.month()
+        file_["release_year"] = date.year()
+        
+        file_["created_at"] = date_str
+        
         # TODO: add more metadata do the soundcloud track
         error = None
         logger.warn("Uploading audio for item at %s" %
