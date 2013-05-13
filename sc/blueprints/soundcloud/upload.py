@@ -164,11 +164,26 @@ class Upload(BluePrintBoiler):
         # I18N AWARE!!!!!!!!!!!!
         if isinstance(file_["title"], unicode):
             file_["title"] = file_["title"].encode("utf-8")
-        #release_day, release_month, release_year
-        date_str = item.get("effectiveDate",
-                    item.get("modification_date",
-                     item.get("creation_date", None)))
-        date = DateTime(date_str)
+        # Soundcloud fields: release_day, release_month, release_year
+        
+        # This is needed because in some pipelines
+        # a non-existing date field may come up
+        # as the string "None" (a 4 char str, not None,
+        # the value)
+        for date_field in ("effectiveDate",
+                "modification_date", "creation_date"):
+            date_str = item.get(date_field, None)
+            if date_str and date_str.strip() != "None":
+                break
+        try:
+            date = DateTime(date_str)
+        except SyntaxError: # Yes, of all errors, the DateTime
+                             # folk raise a "SyntaxError" :-/
+            date = DateTime()
+        if date == DateTime():
+            logger.warn("Could not find date for object at %s, "
+                    "setting as current timestamp" % path)
+            date_str = str(date)
         file_["release_day"] = date.day()
         file_["release_month"] = date.month()
         file_["release_year"] = date.year()
